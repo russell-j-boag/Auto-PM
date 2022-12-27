@@ -10,12 +10,10 @@ library(gridExtra)
 
 # Source model functions
 source("dmc/dmc.R")
-load_model("LBA", "lba_B.R")
+load_model("LBA", "lbaN_B.R")
 
 # Load samples
-# print(load("samples/sAutoPM_full_sdvS.RData"))
-print(load("samples/sAutoPM_full.RData"))
-# print(load("samples/sAutoPM_B.RData"))
+print(load("samples/sAutoPM_full_sdvS.RData"))
 samples <- samples1
 
 
@@ -49,12 +47,11 @@ str(samples[[1]]$theta)
 
 # # Generate posterior predictives
 # post_pred_sims <- h.post.predict.dmc(samples, save.simulation = TRUE)
-# save(post_pred_sims, file = "deriv/post_pred_sims_full.RData")
+# save(post_pred_sims, file = "deriv/post_pred_sims_full_sdvS.RData")
 
 # Load posterior predictives
-# print(load("deriv/post_pred_sims_full_sdvS.RData"))
-print(load("deriv/post_pred_sims_full.RData"))
-# print(load("deriv/post_pred_sims_B.RData"))
+print(load("deriv/post_pred_sims_full_sdvS.RData"))
+
 
 # Stack into data frame
 sims <- do.call(rbind, post_pred_sims)
@@ -100,15 +97,24 @@ head(rp, 10)
 # rp <- rp[,c(1,3,2,4,5,6,7,8)]
 
 matchfun(rp)
+
 # Take only the correct responses and drop the R column
 rp_correct <- rp[ matchfun(rp),
                   !(names(rp) %in% c("R")) ]
+
+# Exclude non-existent rows (i.e., manual fail trials and PM stimuli in control blocks)
+rp_correct <- rp_correct[!(rp_correct$auto == "M" & rp_correct$failtrial == "fail"),]
+rp_correct <- rp_correct[!((rp_correct$S == "pc"|rp_correct$S == "pn") & rp_correct$PM == "2"),]
 rp_correct
 
 levels(rp_correct$auto) 
 levels(rp_correct$auto) <- c("Auto", "Manual")
 levels(rp_correct$failtrial) 
-levels(rp_correct$failtrial) <- c("Auto. success", "Auto. failure")
+levels(rp_correct$failtrial) <- c("nonf", "fail", "manu")
+rp_correct$failtrial[rp_correct$auto == "Manual"] <- "manu"
+rp_correct$failtrial <- factor(rp_correct$failtrial, levels = c("nonf", "manu", "fail"), 
+                               labels = c("Auto. success", "Manual", "Auto. failure"))
+levels(rp_correct$failtrial)
 levels(rp_correct$PM) 
 levels(rp_correct$PM) <- c("Control", "PM")
 levels(rp_correct$S)
@@ -117,13 +123,12 @@ str(rp_correct)
 head(rp_correct, 10)
 
 
-# Ongoing task accuracy - Manual vs. Auto (i.e., excluding failure trials)
-rp_correct_ongoing_plot <- rp_correct[(rp_correct$S == "Conflict"|rp_correct$S == "Non-conflict") &
-                                        (rp_correct$failtrial == "Auto. success"),] %>%
-  ggplot(aes(x = auto)) +
+# Ongoing task accuracy
+rp_correct_ongoing_plot <- rp_correct[(rp_correct$S == "Conflict"|rp_correct$S == "Non-conflict"),] %>%
+  ggplot(aes(x = failtrial)) +
   geom_point(stat = "identity", aes(y = data), size = 3, shape = 1) +
   geom_point(stat = "identity", aes(y = median), size = 2) +
-  geom_line(aes(y = median, group = S), 
+  geom_line(aes(y = median, group = S),
             linetype = "dashed", 
             size = 0.8) +
   geom_errorbar(aes(ymin = lower, 
@@ -131,8 +136,8 @@ rp_correct_ongoing_plot <- rp_correct[(rp_correct$S == "Conflict"|rp_correct$S =
                     width = 0.3)) +
   ylim(0.5, 1) +
   facet_grid(S ~ PM) +
-  labs(title = "Correct ongoing task responses", 
-       x = "Automation condition", 
+  labs(title = "Ongoing task accuracy", 
+       x = "Trial type", 
        y = "Response proportion", 
        color = "Stimulus",
        shape = "Stimulus") +
@@ -140,33 +145,10 @@ rp_correct_ongoing_plot <- rp_correct[(rp_correct$S == "Conflict"|rp_correct$S =
 rp_correct_ongoing_plot 
 
 
-# Ongoing task accuracy - Auto. success vs. Auto failure (i.e., excluding manual trials)
-rp_correct_ongoing_failures_plot <- rp_correct[(rp_correct$S == "Conflict"|rp_correct$S == "Non-conflict") &
-                                                 (rp_correct$auto == "Auto"),] %>%
+
+# PM accuracy
+rp_correct_PM_plot <- rp_correct[(rp_correct$S == "PM conflict"|rp_correct$S == "PM non-conflict"),] %>%
   ggplot(aes(x = failtrial)) +
-  geom_point(stat = "identity", aes(y = data), size = 3, shape = 1) +
-  geom_point(stat = "identity", aes(y = median), size = 2) +
-  geom_line(aes(y = median, group = S), 
-            linetype = "dashed", 
-            size = 0.8) +
-  geom_errorbar(aes(ymin = lower, 
-                    ymax = upper, 
-                    width = 0.3)) +
-  ylim(0.5, 1) +
-  facet_grid(S ~ PM) +
-  labs(title = "Correct ongoing task responses (automation failure contrast)", 
-       x = "Automation success/failure", 
-       y = "Response proportion", 
-       color = "Stimulus",
-       shape = "Stimulus") +
-  theme_minimal()
-rp_correct_ongoing_failures_plot 
-
-
-# PM accuracy - Manual vs. Auto (i.e., excluding failure trials)
-rp_correct_PM_plot <- rp_correct[(rp_correct$S == "PM conflict"|rp_correct$S == "PM non-conflict") &
-                                   (rp_correct$PM == "PM") & (rp_correct$failtrial == "Auto. success"),] %>%
-  ggplot(aes(x = auto)) +
   geom_point(stat = "identity", aes(y = data), size = 3, shape = 1) +
   geom_point(stat = "identity", aes(y = median), size = 2) +
   geom_line(aes(y = median, group = S), 
@@ -177,36 +159,14 @@ rp_correct_PM_plot <- rp_correct[(rp_correct$S == "PM conflict"|rp_correct$S == 
                     width = 0.3)) +
   ylim(0.7, 1) +
   facet_grid(S ~ .) +
-  labs(title = "Correct PM responses", 
-       x = "Automation condition", 
+  labs(title = "PM accuracy", 
+       x = "Trial type", 
        y = "Response proportion", 
        color = "Stimulus",
        shape = "Stimulus") +
   theme_minimal()
 rp_correct_PM_plot 
 
-
-# PM accuracy - Auto. success vs. Auto failure (i.e., excluding manual trials)
-rp_correct_PM_failures_plot <- rp_correct[(rp_correct$S == "PM conflict"|rp_correct$S == "PM non-conflict") &
-                                            (rp_correct$PM == "PM") & (rp_correct$auto == "Auto"),] %>%
-  ggplot(aes(x = failtrial)) +
-  geom_point(stat = "identity", aes(y = data), size = 3, shape = 1) +
-  geom_point(stat = "identity", aes(y = median), size = 2) +
-  geom_line(aes(y = median, group = S), 
-            linetype = "dashed", 
-            size = 0.8) +
-  geom_errorbar(aes(ymin = lower, 
-                    ymax = upper, 
-                    width = 0.3)) +
-  ylim(0.7, 1) +
-  facet_grid(S ~ .) +
-  labs(title = "Correct PM responses (automation failure contrast)", 
-       x = "Automation success/failure", 
-       y = "Response proportion", 
-       color = "Stimulus",
-       shape = "Stimulus") +
-  theme_minimal()
-rp_correct_PM_failures_plot
 
 
 
@@ -227,7 +187,11 @@ rt_correct
 levels(rt_correct$auto) 
 levels(rt_correct$auto) <- c("Auto", "Manual")
 levels(rt_correct$failtrial) 
-levels(rt_correct$failtrial) <- c("Auto. success", "Auto. failure")
+levels(rt_correct$failtrial) <- c("nonf", "fail", "manu")
+rt_correct$failtrial[rt_correct$auto == "Manual"] <- "manu"
+rt_correct$failtrial <- factor(rt_correct$failtrial, levels = c("nonf", "manu", "fail"), 
+                               labels = c("Auto. success", "Manual", "Auto. failure"))
+levels(rt_correct$failtrial)
 levels(rt_correct$PM) 
 levels(rt_correct$PM) <- c("Control", "PM")
 levels(rt_correct$S)
@@ -236,10 +200,9 @@ str(rt_correct)
 head(rt_correct, 10)
 
 
-# Correct ongoing task RT - Manual vs. Auto (i.e., excluding failure trials)
-rt_correct_ongoing_plot <- rt_correct[(rt_correct$S == "Conflict"|rt_correct$S == "Non-conflict") &
-                                        (rt_correct$failtrial == "Auto. success"),] %>%
-  ggplot(aes(x = auto)) +
+# Correct ongoing task RT
+rt_correct_ongoing_plot <- rt_correct[(rt_correct$S == "Conflict"|rt_correct$S == "Non-conflict"),] %>%
+  ggplot(aes(x = failtrial)) +
   geom_point(stat = "identity", aes(y = data), size = 3, shape = 1) +
   geom_point(stat = "identity", aes(y = median), size = 2) +
   geom_line(aes(y = median, group = quantile), 
@@ -250,8 +213,8 @@ rt_correct_ongoing_plot <- rt_correct[(rt_correct$S == "Conflict"|rt_correct$S =
                     width = 0.3)) +
   ylim(0.2, 4.5) +
   facet_grid(S ~ PM) +
-  labs(title = "Correct ongoing task responses", 
-       x = "Automation condition", 
+  labs(title = "Ongoing task RT (correct responses)", 
+       x = "Trial type", 
        y = "RT (s)", 
        color = "Stimulus",
        shape = "Stimulus") +
@@ -259,33 +222,10 @@ rt_correct_ongoing_plot <- rt_correct[(rt_correct$S == "Conflict"|rt_correct$S =
 rt_correct_ongoing_plot 
 
 
-# Correct ongoing task RT - Auto. success vs. Auto failure (i.e., excluding manual trials)
-rt_correct_ongoing_failures_plot <- rt_correct[(rt_correct$S == "Conflict"|rt_correct$S == "Non-conflict") &
-                                                 (rt_correct$auto == "Auto"),] %>%
+
+# Correct PM RT
+rt_correct_PM_plot <- rt_correct[(rt_correct$S == "PM conflict"|rt_correct$S == "PM non-conflict"),] %>%
   ggplot(aes(x = failtrial)) +
-  geom_point(stat = "identity", aes(y = data), size = 3, shape = 1) +
-  geom_point(stat = "identity", aes(y = median), size = 2) +
-  geom_line(aes(y = median, group = quantile), 
-            linetype = "dashed", 
-            size = 0.8) +
-  geom_errorbar(aes(ymin = lower, 
-                    ymax = upper, 
-                    width = 0.3)) +
-  ylim(0.2, 4.5) +
-  facet_grid(S ~ PM) +
-  labs(title = "Correct ongoing task responses (automation failure contrast)", 
-       x = "Automation success/failure", 
-       y = "RT (s)", 
-       color = "Stimulus",
-       shape = "Stimulus") +
-  theme_minimal()
-rt_correct_ongoing_failures_plot 
-
-
-# Correct PM RT - Manual vs. Auto (i.e., excluding failure trials)
-rt_correct_PM_plot <- rt_correct[(rt_correct$S == "PM conflict"|rt_correct$S == "PM non-conflict") &
-                                   (rt_correct$PM == "PM") & (rt_correct$failtrial == "Auto. success"),] %>%
-  ggplot(aes(x = auto)) +
   geom_point(stat = "identity", aes(y = data), size = 3, shape = 1) +
   geom_point(stat = "identity", aes(y = median), size = 2) +
   geom_line(aes(y = median, group = quantile), 
@@ -296,8 +236,8 @@ rt_correct_PM_plot <- rt_correct[(rt_correct$S == "PM conflict"|rt_correct$S == 
                     width = 0.3)) +
   ylim(0, 2.8) +
   facet_grid(S ~ .) +
-  labs(title = "Correct PM responses", 
-       x = "Automation condition", 
+  labs(title = "PM RT (correct responses)",  
+       x = "Trial type", 
        y = "RT (s)", 
        color = "Stimulus",
        shape = "Stimulus") +
@@ -305,27 +245,6 @@ rt_correct_PM_plot <- rt_correct[(rt_correct$S == "PM conflict"|rt_correct$S == 
 rt_correct_PM_plot
 
 
-# Correct PM RT - Auto. success vs. Auto failure (i.e., excluding manual trials)
-rt_correct_PM_failures_plot <- rt_correct[(rt_correct$S == "PM conflict"|rt_correct$S == "PM non-conflict") &
-                                            (rt_correct$PM == "PM") & (rt_correct$auto == "Auto"),] %>%
-  ggplot(aes(x = failtrial)) +
-  geom_point(stat = "identity", aes(y = data), size = 3, shape = 1) +
-  geom_point(stat = "identity", aes(y = median), size = 2) +
-  geom_line(aes(y = median, group = quantile), 
-            linetype = "dashed", 
-            size = 0.8) +
-  geom_errorbar(aes(ymin = lower, 
-                    ymax = upper, 
-                    width = 0.3)) +
-  ylim(0, 2.8) +
-  facet_grid(S ~ .) +
-  labs(title = "Correct PM responses (automation failure contrast)", 
-       x = "Automation success/failure", 
-       y = "RT (s)", 
-       color = "Stimulus",
-       shape = "Stimulus") +
-  theme_minimal()
-rt_correct_PM_failures_plot
 
 
 # Error response time -----------------------------------------------------
@@ -342,7 +261,11 @@ rt_error
 levels(rt_error$auto) 
 levels(rt_error$auto) <- c("Auto", "Manual")
 levels(rt_error$failtrial) 
-levels(rt_error$failtrial) <- c("Auto. success", "Auto. failure")
+levels(rt_error$failtrial) <- c("nonf", "fail", "manu")
+rt_error$failtrial[rt_error$auto == "Manual"] <- "manu"
+rt_error$failtrial <- factor(rt_error$failtrial, levels = c("nonf", "manu", "fail"), 
+                               labels = c("Auto. success", "Manual", "Auto. failure"))
+levels(rt_error$failtrial)
 levels(rt_error$PM) 
 levels(rt_error$PM) <- c("Control", "PM")
 levels(rt_error$S)
@@ -353,34 +276,9 @@ str(rt_error)
 head(rt_error, 10)
 
 
-# Incorrect ongoing task RT - Manual vs. Auto (i.e., excluding failure trials)
+# Incorrect ongoing task RT
 rt_error_ongoing_plot <- rt_error[((rt_error$S == "Conflict" & rt_error$R == "Non-conflict")|
-                                     (rt_error$S == "Non-conflict" & rt_error$R == "Conflict")) &
-                                    (rt_error$failtrial == "Auto. success"),] %>%
-  ggplot(aes(x = auto)) +
-  geom_point(stat = "identity", aes(y = data), size = 3, shape = 1) +
-  geom_point(stat = "identity", aes(y = median), size = 2) +
-  geom_line(aes(y = median, group = quantile), 
-            linetype = "dashed", 
-            size = 0.8) +
-  geom_errorbar(aes(ymin = lower, 
-                    ymax = upper, 
-                    width = 0.3)) +
-  ylim(0.2, 5.2) +
-  facet_grid(S ~ PM) +
-  labs(title = "Incorrect ongoing task responses", 
-       x = "Automation condition", 
-       y = "RT (s)", 
-       color = "Stimulus",
-       shape = "Stimulus") +
-  theme_minimal()
-rt_error_ongoing_plot 
-
-
-# Incorrect ongoing task RT - Auto. success vs. Auto failure (i.e., excluding manual trials)
-rt_error_ongoing_failures_plot <- rt_error[((rt_error$S == "Conflict" & rt_error$R == "Non-conflict")|
-                                              (rt_error$S == "Non-conflict" & rt_error$R == "Conflict")) &
-                                             (rt_error$auto == "Auto"),] %>%
+                                     (rt_error$S == "Non-conflict" & rt_error$R == "Conflict")),] %>%
   ggplot(aes(x = failtrial)) +
   geom_point(stat = "identity", aes(y = data), size = 3, shape = 1) +
   geom_point(stat = "identity", aes(y = median), size = 2) +
@@ -392,20 +290,20 @@ rt_error_ongoing_failures_plot <- rt_error[((rt_error$S == "Conflict" & rt_error
                     width = 0.3)) +
   ylim(0.2, 5.2) +
   facet_grid(S ~ PM) +
-  labs(title = "Incorrect ongoing task responses (automation failure contrast)", 
-       x = "Automation success/failure", 
+  labs(title = "Ongoing task RT (incorrect responses)",
+       x = "Trial type", 
        y = "RT (s)", 
        color = "Stimulus",
        shape = "Stimulus") +
   theme_minimal()
-rt_error_ongoing_failures_plot 
+rt_error_ongoing_plot 
 
 
-# Incorrect PM RT - Manual vs. Auto (i.e., excluding failure trials)
+
+# Incorrect PM RT
 rt_error_PM_plot <- rt_error[((rt_error$S != "PM conflict" & rt_error$R == "PM")|
-                                (rt_error$S != "PM non-conflict" & rt_error$R == "PM")) &
-                               (rt_error$PM == "PM") & (rt_error$failtrial == "Auto. success"),] %>%
-  ggplot(aes(x = auto)) +
+                                (rt_error$S != "PM non-conflict" & rt_error$R == "PM")),] %>%
+  ggplot(aes(x = failtrial)) +
   geom_point(stat = "identity", aes(y = data), size = 3, shape = 1) +
   geom_point(stat = "identity", aes(y = median), size = 2) +
   geom_line(aes(y = median, group = quantile), 
@@ -416,8 +314,8 @@ rt_error_PM_plot <- rt_error[((rt_error$S != "PM conflict" & rt_error$R == "PM")
                     width = 0.3)) +
   ylim(0.2, 9) +
   facet_grid(S ~ PM) +
-  labs(title = "Incorrect PM responses", 
-       x = "Automation condition", 
+  labs(title = "PM RT (incorrect responses)", 
+       x = "Trial type", 
        y = "RT (s)", 
        color = "Stimulus",
        shape = "Stimulus") +
@@ -425,53 +323,25 @@ rt_error_PM_plot <- rt_error[((rt_error$S != "PM conflict" & rt_error$R == "PM")
 rt_error_PM_plot 
 
 
-# Incorrect PM RT - Auto. success vs. Auto failure (i.e., excluding manual trials)
-rt_error_PM_failures_plot <- rt_error[((rt_error$S != "PM conflict" & rt_error$R == "PM")|
-                                         (rt_error$S != "PM non-conflict" & rt_error$R == "PM"))  &
-                                        (rt_error$PM == "PM") & (rt_error$auto == "Auto"),] %>%
-  ggplot(aes(x = failtrial)) +
-  geom_point(stat = "identity", aes(y = data), size = 3, shape = 1) +
-  geom_point(stat = "identity", aes(y = median), size = 2) +
-  geom_line(aes(y = median, group = quantile), 
-            linetype = "dashed", 
-            size = 0.8) +
-  geom_errorbar(aes(ymin = lower, 
-                    ymax = upper, 
-                    width = 0.3)) +
-  ylim(0.2, 11) +
-  facet_grid(S ~ PM) +
-  labs(title = "Incorrect PM responses (automation failure contrast)", 
-       x = "Automation success/failure", 
-       y = "RT (s)", 
-       color = "Stimulus",
-       shape = "Stimulus") +
-  theme_minimal()
-rt_error_PM_failures_plot 
-
 
 
 # Combine and save plots --------------------------------------------------
+
+library("gridExtra")
+library("ggpubr")
 
 # Accuracy plots
 ggsave("plots/fits_accuracy_ongoing.png", plot = rp_correct_ongoing_plot, 
        width = 2000, height = 1400, units = "px")
 
-ggsave("plots/fits_accuracy_ongoing_failures.png", plot = rp_correct_ongoing_failures_plot, 
-       width = 2000, height = 1400, units = "px")
-
 ggsave("plots/fits_accuracy_PM.png", plot = rp_correct_PM_plot, 
        width = 2000, height = 1400, units = "px")
 
-ggsave("plots/fits_accuracy_PM_failures.png", plot = rp_correct_PM_failures_plot, 
+ggsave("plots/fits_correct_RT_PM.png", plot = rt_correct_PM_plot, 
        width = 2000, height = 1400, units = "px")
 
 
-# Ongoing task RT plots
-
-# Load additional plotting libraries
-library("gridExtra")
-library("ggpubr")
-
+# Ongoing task RT
 # Remove plot legends
 rt_correct_ongoing_plot <- rt_correct_ongoing_plot + theme(legend.position = "none",
                                                            axis.title.x = element_blank(),
@@ -484,32 +354,12 @@ rt_error_ongoing_plot <- rt_error_ongoing_plot + theme(legend.position = "none",
 ggarrange(rt_correct_ongoing_plot, rt_error_ongoing_plot, nrow = 2,
           common.legend = TRUE, legend = "right")
 
-ggsave("plots/fits_RT.png", plot = last_plot(), 
+ggsave("plots/fits_RT_ongoing.png", plot = last_plot(), 
        width = 2200, height = 2000, units = "px")
 
 
-# Remove plot legends
-rt_correct_ongoing_failures_plot <- rt_correct_ongoing_failures_plot + theme(legend.position = "none",
-                                                                             axis.title.x = element_blank(),
-                                                                             axis.text.x = element_blank())
 
-rt_error_ongoing_failures_plot <- rt_error_ongoing_failures_plot + theme(legend.position = "none",
-                                                                         strip.text.x = element_blank())
-
-ggarrange(rt_correct_ongoing_failures_plot, rt_error_ongoing_failures_plot, nrow = 2,
-          common.legend = TRUE, legend = "right")
-
-ggsave("plots/fits_RT_failures.png", plot = last_plot(), 
-       width = 2200, height = 2000, units = "px")
-
-
-#####
-
-# rt_correct_PM_failures_plot <- rt_correct_PM_failures_plot + theme(legend.position = "none",
-#                                                                    strip.text.x = element_blank())
-
-# PM task RT plots
-
+# PM RT
 # Remove plot legends
 rt_correct_PM_plot <- rt_correct_PM_plot + theme(legend.position = "none",
                                                  axis.title.x = element_blank(),
@@ -524,16 +374,3 @@ ggarrange(rt_correct_PM_plot, rt_error_PM_plot, nrow = 2,
 ggsave("plots/fits_RT_PM.png", plot = last_plot(), 
        width = 2200, height = 2000, units = "px")
 
-# Remove plot legends
-rt_correct_PM_failures_plot <- rt_correct_PM_failures_plot + theme(legend.position = "none",
-                                                                   axis.title.x = element_blank(),
-                                                                   axis.text.x = element_blank())
-
-rt_error_PM_failures_plot <- rt_error_PM_failures_plot + theme(legend.position = "none",
-                                                               strip.text.x = element_blank())
-
-ggarrange(rt_correct_PM_failures_plot, rt_error_PM_failures_plot, nrow = 2,
-          common.legend = TRUE, legend = "right")
-
-ggsave("plots/fits_RT_PM_failures.png", plot = last_plot(), 
-       width = 2200, height = 2000, units = "px")
