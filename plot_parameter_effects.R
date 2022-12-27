@@ -10,7 +10,7 @@ library(gridExtra)
 
 # Source model functions
 source("dmc/dmc.R")
-load_model("LBA", "lba_B.R")
+load_model("LBA", "lbaN_B.R")
 
 
 # Summary functions -------------------------------------------------------
@@ -40,12 +40,8 @@ fixedeffects.meanthetas <- function(samples){
 # -------------------------------------------------------------------------
 
 # Load samples
-# print(load("samples/sAutoPM_full_sdvS.RData"))
-# samples <- samples1
-print(load("samples/sAutoPM_full.RData"))
+print(load("samples/sAutoPM_full_sdvS.RData"))
 samples <- samples1
-# print(load("samples/sAutoPM_B.RData"))
-# samples <- samples1
 samples[[1]]$p.names
 
 
@@ -58,9 +54,7 @@ samples[[1]]$p.names
 # parms
 
 # Load parameter summary
-# print(load("deriv/map_parms_full_sdvS.RData"))
-print(load("deriv/map_parms_full.RData"))
-# print(load("deriv/map_parms_B.RData"))
+print(load("deriv/map_parms_full_sdvS.RData"))
 str(parms)
 head(parms)
 nrow(parms)
@@ -72,14 +66,10 @@ colMeans(parms)
 mean_thetas <- fixedeffects.meanthetas(samples)[[1]]
 
 # Save
-# save(mean_thetas, file = "deriv/mean_thetas_full_sdvS.RData")
-save(mean_thetas, file = "deriv/mean_thetas_full.RData")
-# save(mean_thetas, file = "deriv/mean_thetas_B.RData")
+save(mean_thetas, file = "deriv/mean_thetas_full_sdvS.RData")
 
 # Load
-# print(load("deriv/mean_thetas_full_sdvS.RData"))
-print(load("deriv/mean_thetas_full.RData"))
-# print(load("deriv/mean_thetas_B.RData"))
+print(load("deriv/mean_thetas_full_sdvS.RData"))
 
 # Explore mean thetas
 str(mean_thetas)
@@ -101,7 +91,7 @@ colMeans(parms)
 # Add factors for plotting ------------------------------------------------
 ps <- data.frame(msds)
 head(ps, 10)
-ps$auto <- NA; ps$PM <- NA; ps$fail <- NA; ps$S <- NA; ps$R <- NA
+ps$auto <- NA; ps$PM <- NA; ps$PM_trial <- NA; ps$fail <- NA; ps$S <- NA; ps$R <- NA
 
 ps$auto[grep(".A", rownames(ps))] <- "Auto"
 ps$auto[grep(".M", rownames(ps))] <- "Manual"
@@ -109,9 +99,15 @@ ps$auto[grep(".M", rownames(ps))] <- "Manual"
 ps$PM[grep("2", rownames(ps))] <- "Control"
 ps$PM[grep("3", rownames(ps))] <- "PM"
 
-ps$fail[grep("nonf", rownames(ps))] <- "Auto. success"
-ps$fail[grep("Mnonf", rownames(ps))] <- "Manual"
-ps$fail[grep("fail", rownames(ps))] <- "Auto. failure"
+ps$PM_trial[grep("cc", rownames(ps))] <- "Absent"
+ps$PM_trial[grep("nn", rownames(ps))] <- "Absent"
+ps$PM_trial[grep("pc", rownames(ps))] <- "Present"
+ps$PM_trial[grep("pn", rownames(ps))] <- "Present"
+ps$PM_trial[grep("pp", rownames(ps))] <- "Present"
+
+ps$fail[grep("Anonf", rownames(ps))] <- "Auto. success"
+ps$fail[grep("Mmanu", rownames(ps))] <- "Manual"
+ps$fail[grep("Afail", rownames(ps))] <- "Auto. failure"
 
 ps$S[grep("cc", rownames(ps))] <- "Conflict"
 ps$S[grep("nn", rownames(ps))] <- "Non-conflict"
@@ -125,11 +121,42 @@ ps$R[grep("P", rownames(ps))] <- "PM"
 
 ps$auto <- factor(ps$auto)
 ps$PM <- factor(ps$PM)
-ps$fail <- factor(ps$fail)
+ps$fail <- factor(ps$fail, levels = c("Auto. success", "Manual", "Auto. failure"))
 ps$S <- factor(ps$S)
 ps$R <- factor(ps$R)
 str(ps)
 ps
+
+# Congruence-coded rates
+head(ps)
+congruence <- ps[ grep("mean_v.", rownames(ps)), ]
+congruence <- congruence[ -grep("PMFA", rownames(congruence)), ]
+congruence <- congruence[ !(congruence$S == "PM conflict"|congruence$S == "PM non-conflict"|congruence$S == "PM"), ]
+congruence$congruence <- NA
+
+congruence$congruence[(congruence$fail == "Auto. success" & congruence$S == "Conflict") &
+                        congruence$R == "Conflict"] <- "Congruent"
+congruence$congruence[(congruence$fail == "Auto. success" & congruence$S == "Conflict") &
+                        congruence$R == "Non-conflict"] <- "Incongruent"
+
+congruence$congruence[(congruence$fail == "Auto. failure" & congruence$S == "Conflict") &
+                        congruence$R == "Conflict"] <- "Incongruent"
+congruence$congruence[(congruence$fail == "Auto. failure" & congruence$S == "Conflict") &
+                        congruence$R == "Non-conflict"] <- "Congruent"
+
+congruence$congruence[(congruence$fail == "Auto. success" & congruence$S == "Non-conflict") &
+                        congruence$R == "Non-conflict"] <- "Congruent"
+congruence$congruence[(congruence$fail == "Auto. success" & congruence$S == "Non-conflict") &
+                        congruence$R == "Conflict"] <- "Incongruent"
+
+congruence$congruence[(congruence$fail == "Auto. failure" & congruence$S == "Non-conflict") &
+                        congruence$R == "Non-conflict"] <- "Incongruent"
+congruence$congruence[(congruence$fail == "Auto. failure" & congruence$S == "Non-conflict") &
+                        congruence$R == "Conflict"] <- "Congruent"
+
+congruence$congruence[(congruence$fail == "Manual")] <- "Manual"
+congruence$congruence <- factor(congruence$congruence, levels = c("Congruent", "Manual", "Incongruent"))
+congruence
 
 # Get A
 A <- ps[ grep("^A", rownames(ps)), c("M", "SD") ]
@@ -148,6 +175,18 @@ v
 v <- v[!(v$S == "PM conflict" & v$R != "PM") & !(v$S == "PM non-conflict" & v$R != "PM"),]
 v
 
+
+# Get reactive control v
+reactive <- ps[ grep("mean_v.", rownames(ps)), ]
+reactive <- reactive[ -grep("PMFA", rownames(reactive)), ]
+reactive <- reactive[ -grep("P", rownames(reactive)), ]
+reactive <- reactive[ (reactive$S == "Conflict" & reactive$R == "Conflict")|
+                        (reactive$S == "PM conflict" & reactive$R == "Conflict")|
+                        (reactive$S == "Non-conflict" & reactive$R == "Non-conflict")|
+                        (reactive$S == "PM non-conflict" & reactive$R == "Non-conflict"), ]
+reactive
+
+
 # Get t0
 t0 <- ps[ grep("t0",rownames(ps)), c("M", "SD") ]
 t0
@@ -165,7 +204,7 @@ B_plot <- B %>%
   geom_errorbar(aes(ymin = M - SD, 
                     ymax = M + SD, 
                     width = 0.3, color = R)) +
-  ylim(0.5, 3.5) +
+  ylim(0.4, 2.1) +
   facet_grid(. ~ PM) +
   labs(title = "Threshold", 
        x = "Automation condition", 
@@ -176,12 +215,13 @@ B_plot <- B %>%
 B_plot
 
 ggsave("plots/B_plot.png", plot = B_plot, 
-       width = 2000, height = 1400, units = "px")
+       width = 2000, height = 1200, units = "px")
 
 
-# Plot ongoing task rates - Manual vs. Auto (i.e., excluding failure trials)
-v_ongoing_plot <- v[v$S != "PM" & v$fail != "Auto. failure" ,] %>%
-  ggplot(aes(x = auto, y = M, shape = R, color = R)) +
+
+# Plot ongoing task rates
+v_ongoing_plot <- v[v$S != "PM" ,] %>%
+  ggplot(aes(x = fail, y = M, shape = R, color = R)) +
   geom_point(stat = "identity", aes(), size = 3) +
   geom_line(aes(y = M, group = R), 
             linetype = "dashed", 
@@ -189,10 +229,10 @@ v_ongoing_plot <- v[v$S != "PM" & v$fail != "Auto. failure" ,] %>%
   geom_errorbar(aes(ymin = M - SD, 
                     ymax = M + SD, 
                     width = 0.3)) +
-  ylim(0, 1.8) +
+  ylim(0.1, 1.4) +
   facet_grid(S ~ PM) +
   labs(title = "Ongoing task accumulation rate", 
-       x = "Automation condition", 
+       x = "Trial type", 
        y = "v", 
        color = "Response",
        shape = "Response") +
@@ -202,9 +242,34 @@ v_ongoing_plot
 ggsave("plots/v_ongoing_plot.png", plot = v_ongoing_plot, 
        width = 2400, height = 1400, units = "px")
 
-# Plot ongoing task rates - Auto. success vs. Auto failure (i.e., excluding manual trials)
-v_ongoing_failures_plot <- v[v$S != "PM" ,] %>%
-  ggplot(aes(x = fail, y = M, shape = R, color = R)) +
+
+
+# Plot PM rates
+v_PM_plot <- v[v$S == "PM",] %>%
+  ggplot(aes(x = fail, y = M)) +
+  geom_point(stat = "identity", aes(), size = 3) +
+  geom_line(aes(y = M, group = 1), 
+            linetype = "dashed", 
+            size = 0.8) +
+  geom_errorbar(aes(ymin = M - SD, 
+                    ymax = M + SD, 
+                    width = 0.3)) +
+  ylim(1.44, 1.72) +
+  # facet_grid(. ~ PM) +
+  labs(title = "PM accumulation rate", 
+       x = "Trial type", 
+       y = "v") +
+  theme_minimal()
+v_PM_plot
+
+ggsave("plots/v_PM_plot.png", plot = v_PM_plot, 
+       width = 1600, height = 1000, units = "px")
+
+
+
+# Plot reactive control
+reactive_plot <- reactive[reactive$PM == "PM",] %>%
+  ggplot(aes(x = PM_trial, y = M, shape = R, color = R)) +
   geom_point(stat = "identity", aes(), size = 3) +
   geom_line(aes(y = M, group = R), 
             linetype = "dashed", 
@@ -212,40 +277,40 @@ v_ongoing_failures_plot <- v[v$S != "PM" ,] %>%
   geom_errorbar(aes(ymin = M - SD, 
                     ymax = M + SD, 
                     width = 0.3)) +
-  ylim(0, 1.8) +
-  facet_grid(S ~ PM) +
-  labs(title = "Ongoing task accumulation rate (automation failure contrast)", 
-       x = "Automation success/failure", 
+  ylim(0, 1.4) +
+  facet_grid(. ~ fail) +
+  labs(title = "Reactive control of ongoing task accumulation rate", 
+       x = "PM stimulus", 
        y = "v", 
        color = "Response",
        shape = "Response") +
   theme_minimal()
-v_ongoing_failures_plot
+reactive_plot
 
-ggsave("plots/v_ongoing_failures_plot.png", plot = v_ongoing_failures_plot, 
-       width = 2400, height = 1400, units = "px")
+ggsave("plots/reactive_plot.png", plot = reactive_plot, 
+       width = 2200, height = 1200, units = "px")
 
 
-# Plot PM rates - Manual vs. Auto (i.e., excluding failure trials)
-v_PM_plot <- v[v$S == "PM",] %>%
-  ggplot(aes(x = auto, y = M, shape = fail, color = fail)) +
+
+# Plot ongoing task rates (congruence-coded)
+v_ongoing_plot_congruence <- congruence %>%
+  ggplot(aes(x = congruence, y = M, shape = R, color = R)) +
   geom_point(stat = "identity", aes(), size = 3) +
-  geom_line(aes(y = M, group = fail), 
+  geom_line(aes(y = M, group = R), 
             linetype = "dashed", 
             size = 0.8) +
   geom_errorbar(aes(ymin = M - SD, 
                     ymax = M + SD, 
                     width = 0.3)) +
-  ylim(1.5, 1.8) +
-  # facet_grid(. ~ PM) +
-  labs(title = "PM accumulation rate", 
-       x = "Automation condition", 
+  ylim(0.1, 1.3) +
+  facet_grid(S ~ PM) +
+  labs(title = "Ongoing task accumulation rate", 
+       x = "Congruence with automation", 
        y = "v", 
-       color = "Automation success/failure",
-       shape = "Automation success/failure") +
+       color = "Response",
+       shape = "Response") +
   theme_minimal()
-v_PM_plot
+v_ongoing_plot_congruence
 
-ggsave("plots/v_PM_plot.png", plot = v_PM_plot, 
-       width = 1600, height = 1000, units = "px")
-
+ggsave("plots/v_ongoing_plot_congruence.png", plot = v_ongoing_plot_congruence, 
+       width = 2400, height = 1400, units = "px")
